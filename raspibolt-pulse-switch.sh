@@ -31,6 +31,7 @@ sn_electrs="electrs"
 sn_fulcrum="fulcrum"
 sn_rtl="rtl"                            # rtl, ridethelightning
 sn_thunderhub="thunderhub"
+sn_albyhub="albyhub"
 
 # Helper functionality
 # ------------------------------------------------------------------------------
@@ -161,7 +162,8 @@ save_raspibolt_versions() {
     "blockexplorer": "${btcrpcexplorergit}",
     "rtl": "${rtlgit}",
     "fulcrum": "${fulcrumgit}",
-    "thunderhub": "${thunderhubgit}"
+    "thunderhub": "${thunderhubgit}",
+    "albyhub": "${albyhubgit}"
   }
 }
 EOF
@@ -176,6 +178,7 @@ load_raspibolt_versions() {
   rtlgit=$(cat ${gitstatusfile} | jq -r '.githubversions.rtl')
   fulcrumgit=$(cat ${gitstatusfile} | jq -r '.githubversions.fulcrum')
   thunderhubgit=$(cat ${gitstatusfile} | jq -r '.githubversions.thunderhub')
+  albyhubgit=$(cat ${gitstatusfile} | jq -r '.githubversions.albyhub')
 }
 
 fetch_githubversion_bitcoin() {
@@ -205,6 +208,9 @@ fetch_githubversion_lnd() {
 fetch_githubversion_cln() {
   clngit=$(curl -s --connect-timeout 5 https://api.github.com/repos/ElementsProject/lightning/releases/latest | jq -r '.tag_name | select(.!=null)')
 }
+fetch_githubversion_albyhub() {
+  albyhubgit=$(curl -s --connect-timeout 5 https://api.github.com/repos/getalby/hub/releases/latest | jq -r '.tag_name | select(.!=null)')
+}
 
 
 # Check if we should update with latest versions from github (limit to once every 6 hours)
@@ -226,6 +232,7 @@ if [ "${gitupdate}" -eq "1" ]; then
   fetch_githubversion_rtl
   fetch_githubversion_fulcrum
   fetch_githubversion_thunderhub
+  fetch_githubversion_albyhub
   # write to json file
   save_raspibolt_versions
 else
@@ -265,6 +272,10 @@ if [ -z "$fulcrumgit" ]; then
 fi
 if [ -z "$thunderhubgit" ]; then
   fetch_githubversion_thunderhub
+  resaveraspibolt="1"
+fi
+if [ -z "$albyhubgit" ]; then
+  fetch_githubversion_albyhub
   resaveraspibolt="1"
 fi
 if [ "${resaveraspibolt}" -eq "1" ]; then
@@ -615,6 +626,7 @@ if [ "$rtl_status" != "enabled" ]; then  # fallback from rtl to ridethelightning
   rtl_status=$(systemctl is-enabled ${sn_rtl} 2>&1)
 fi
 thunderhub_status=$(systemctl is-enabled ${sn_thunderhub} 2>&1)
+albyhub_status=$(systemctl is-enabled ${sn_albyhub} 2>&1)
 # Ride the Ligthning specific
 if [ "$rtl_status" = "enabled" ]; then
   un_rtl=$(systemctl show -pUser ${sn_rtl} | awk '{split($0,a,"="); print a[2]}')
@@ -651,6 +663,24 @@ elif [ "$thunderhub_status" = "enabled" ]; then
       lwserver_version="$thunderhubpi"" Update!"
     fi
   fi
+ # Alby Hub specific
+elif [ "$albyhub_status" = "enabled" ]; then
+  un_albyhub=$(systemctl show -pUser ${sn_albyhub} | awk '{split($0,a,"="); print a[2]}')
+  albyhub_status=$(systemctl is-active ${sn_albyhub} 2>&1)
+  lwserver_found=1
+  lwserver_label="Alby Hub"
+  lwserver_running="down"
+  if [ "$albyhub_status" = "active" ]; then
+     lwserver_running="up"
+     lwserver_color="${color_green}"                                    
+     albyhubpi=$(curl -s --connect-timeout 5 localhost/api/info | jq -r '.version')                                                             
+     if [ "$albyhubpi" = "$albyhubgit" ]; then                          
+       lwserver_version="$albyhubpi"                                    
+       lwserver_version_color="${color_green}"                          
+     else                                                               
+       lwserver_version="$albyhubpi"" Update!"                          
+     fi                                                                 
+   fi   
 # ... add any future supported lightning web app implementation checks here
 fi
 if [ "$lwserver_found" -eq 0 ]; then
